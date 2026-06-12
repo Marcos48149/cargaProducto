@@ -20,7 +20,9 @@ from PIL import Image
 from dotenv import load_dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import google.generativeai as genai
+#import google.generativeai as genai
+
+from openai import OpenAI
 
 load_dotenv()
 
@@ -47,9 +49,14 @@ VTEX_HEADERS   = {
     'Accept':              'application/json',
 }
 
+
+client_oai = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
+
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-genai.configure(api_key=GEMINI_API_KEY)
+#GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+#genai.configure(api_key=GEMINI_API_KEY)
 
 WAREHOUSE_ID = '1_1'
 
@@ -750,11 +757,13 @@ TALLES_FIELD_VALUE_IDS_NINOS = {
 
 
 # ── Gemini — analizar producto ────────────────────────────────
-def analizar_producto_con_gemini(codigo_sku, url_imagen, marca):
-    model = genai.GenerativeModel("gemini-2.0-flash")
+from openai import OpenAI
 
-    r = requests.get(url_imagen, timeout=15)
-    imagen_pil = Image.open(BytesIO(r.content))
+client_oai = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
+
+def analizar_producto_con_gemini(codigo_sku, url_imagen, marca):
 
     categorias_str = '\n'.join(f'  - {c}' for c in CATEGORIAS.keys())
 
@@ -765,14 +774,13 @@ Categorías disponibles (elegí la más exacta):
 {categorias_str}
 
 Te voy a pasar iamgenes de productos que debo cargar a mi web,
-cada imagen esta nombrada con su codigo ej: ADI-445658, Y NECESITO QUE ENCUENTRES EL MODELO EXACTO DE CADA ARTICULO 
+cada imagen esta nombrada con su codigo ej: ADI-445658, Y NECESITO QUE ENCUENTRES EL MODELO EXACTO DE CADA ARTICULO
 Y ME ENTREGUES UN JSON COMO EL QUE TE ESPECIFICO ABAJO , LOS CAMPOS IMPORTANTES QUE TIENES QUE PRESTAR ATENCION
-AL COMPLETAR SON ESTOS: 'CODIGO_SKU': 'MODELO': 'CATEGORIA': 'MARCA': ES IMPORTANTE QUE 
+AL COMPLETAR SON ESTOS: 'CODIGO_SKU': 'MODELO': 'CATEGORIA': 'MARCA': ES IMPORTANTE QUE
 EN MODELO COLOQUES EL TITULO DEL PRODCUTO Y QUE TENGA EL NOMBRE DEL MODELO EXACTO DEL ARTICULO,
 
 Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PARA TU CONTEXTO):
 {{
-   
         "CODIGO_SKU":      "ASI-1042A291401",
         "MODELO":          "Zapatillas Asics Gel-Backhand 2 Clay Mujer",
         "COLOR":           "Celeste/Azul",
@@ -782,19 +790,39 @@ Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PA
         "PRECIO_TACHADO":  None,
         "WAREHOUSE_ID":    "1_1",
         "STOCK_POR_TALLE": None,
-        "TALLES_MANUALES": None,
-    
-
+        "TALLES_MANUALES": None
 }}"""
 
-    response = model.generate_content([imagen_pil, prompt])
-    texto = response.text.strip()
+    response = client_oai.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": url_imagen
+                        }
+                    }
+                ]
+            }
+        ],
+        max_tokens=800
+    )
+
+    texto = response.choices[0].message.content.strip()
+
     if '```' in texto:
         texto = texto.split('```')[1]
         if texto.startswith('json'):
             texto = texto[4:]
-    return json.loads(texto.strip())
 
+    return json.loads(texto.strip())
 
 # ── VTEX — funciones principales ─────────────────────────────
 def crear_producto(titulo, descripcion, categoria_key, marca_key, codigo_ref,
@@ -997,7 +1025,7 @@ async def main():
             url_principal = hacer_publico(drive_service, item['file_id'])
 
             # Gemini analiza
-            log.info('🤖 Analizando con Gemini...')
+            log.info('🤖 Analizando con OpenAI...')
             datos = analizar_producto_con_gemini(codigo_sku, url_principal, marca)
 
             categoria = datos['categoria']
