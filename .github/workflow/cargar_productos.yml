@@ -1,0 +1,32 @@
+name: Cargar Productos VTEX
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # todos los días a las 8am Argentina (UTC-3)
+  workflow_dispatch:        # también se puede ejecutar manualmente desde GitHub
+
+jobs:
+  cargar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar cargador
+        env:
+          VTEX_ACCOUNT:        ${{ secrets.VTEX_ACCOUNT }}
+          VTEX_APP_KEY:        ${{ secrets.VTEX_APP_KEY }}
+          VTEX_APP_TOKEN:      ${{ secrets.VTEX_APP_TOKEN }}
+          OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_CREDENTIALS:  ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: python vtex_loader.py
