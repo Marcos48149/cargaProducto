@@ -18,8 +18,7 @@ from io import BytesIO
 import requests
 from PIL import Image
 from dotenv import load_dotenv
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import google.generativeai as genai
 
@@ -56,25 +55,20 @@ WAREHOUSE_ID = '1_1'
 
 # ── Google Drive ──────────────────────────────────────────────
 def get_drive_service():
-    """Autenticar con Google Drive usando credenciales de GitHub Secrets."""
-    creds_json = os.getenv('GOOGLE_CREDENTIALS')
-    if not creds_json:
-        raise ValueError('Falta GOOGLE_CREDENTIALS en los secrets')
+    """Autenticar con Google Drive usando Service Account."""
 
-    creds_data = json.loads(creds_json)
-    creds = Credentials(
-        token=creds_data['token'],
-        refresh_token=creds_data['refresh_token'],
-        token_uri='https://oauth2.googleapis.com/token',
-        client_id=creds_data['client_id'],
-        client_secret=creds_data['client_secret'],
-        scopes=['https://www.googleapis.com/auth/drive']
+    SCOPES = ['https://www.googleapis.com/auth/drive']
+
+    creds = service_account.Credentials.from_service_account_file(
+        'service-account.json',
+        scopes=SCOPES
     )
-    if creds.expired:
-        creds.refresh(Request())
 
-    return build('drive', 'v3', credentials=creds)
-
+    return build(
+        'drive',
+        'v3',
+        credentials=creds
+    )
 
 def obtener_imagenes_nuevas(drive_service, horas=24):
     """
@@ -216,6 +210,517 @@ CATEGORIAS = {
     'ninos_conjuntos':    {'dept_id': 10, 'cat_id': 96,  'cat': 'Conjuntos'},
     'ninos_ojotas':       {'dept_id': 10, 'cat_id': 89,  'cat': 'Ojotas'},
 }
+# ////////TALLES /////////////
+
+TALLES = {
+
+    'nike': {
+        'hombre': {  # US → ARG  (entero = talle, M = medio talle)
+            '6':   '37.5', '6M':  '38',
+            '7':   '39',   '7M':  '39.5',
+            '8':   '40',   '8M':  '41',
+            '9':   '41.5', '9M':  '42/42.5',
+            '10':  '43',   '10M': '43.5',
+            '11':  '44',   '11M': '44.5',
+            '12':  '45',   '12M': '46',
+            '13':  '46.5', '13M': '47',
+
+        },
+        'mujer': {
+            '5':   '34.5', '5M':  '35',
+            '6':   '35.5', '6M':  '36/36.5',
+            '7':   '37',   '7M':  '37.5',
+            '8':   '38',   '8M':  '39',
+            '9':   '39.5', '9M':  '40',
+            '10':  '41',   '10M': '41.5',
+
+        },
+        'ninos': {
+            '10':  '27',   '10M': '27',
+            '11':  '28',   '11M': '28',
+            '12':  '29',   '12M': '29',
+            '13':  '30',   '13M': '30',
+            '1':   '31',   '1M':  '32',
+            '2':   '32.5', '2M':  '33',
+            '3':   '34',   '3M':  '34.5',
+            '4':   '35',   '4M':  '35.5',
+            '5':   '36.5', '5M':  '37',
+            '6':   '37.5',
+        },
+
+        'talle_unico': 'MISC'
+    },
+
+    'adidas': {
+        'hombre': {  # UK → ARG  (mismo para mujer adulto)
+
+            '7':   '39',   '7M': '39.5',
+            '8':   '40',   '8M': '41',
+            '9':   '41.5', '9M': '42',
+            '10':  '43',   '10M':'43.5',
+            '11':  '44',   '11M':'45',
+        },
+        'mujer': {  # mismo que hombre
+            '3':   '34.5', '3M': '34.5',
+            '4':   '35.5', '4M': '36',
+            '5':   '36.5', '5M': '37.5',
+            '6':   '38',   '6M': '38.5',
+            '7':   '39',   '7M': '39.5',
+            '8':   '40', '9':   '41.5'
+        },
+        'unisex': {
+            '3':   '34.5', '3M': '34.5',
+            '4':   '35.5', '4M': '36',
+            '5':   '36.5', '5M': '37.5',
+            '6':   '38',   '6M': '38.5',
+            '7':   '39',   '7M': '39.5',
+            '8':   '40',   '8M': '41',
+            '9':   '41.5', '9M': '42',
+            '10':  '43',   '10M':'43.5',
+            '11':  '44',   '11M':'45',
+        },
+          'ninos': {
+        # NIÑOS 0-4 (UK Kids)
+        '2k':    '16.5', '2.5k': '17',   '3k':   '17.5',
+        '3.5k':  '18',   '4k':   '19',   '4.5k': '19.5',
+        '5k':    '20',   '5.5k': '21',   '6k':   '21.5',
+        '6.5k':  '22',   '7k':   '22.5', '7.5k': '23.5',
+        '8k':    '24',   '8.5k': '24.5', '9k':   '25',
+        },
+        # NIÑOS 4-8 (UK Kids)
+        'ninosJr': {
+        '9.5k': '26',   '10k':  '26.5',
+        '10.5k': '27',   '11k':  '27.5', '11.5k':'28.5',
+        '12k':   '29',   '12.5k':'29.5', '13k':  '30.5',
+        '13.5k': '31',   '1':    '31.5', '1.5':  '32',
+        '2':     '33',   '2.5':  '33.5', '3':    '34',
+        '3.5':   '34.5', '4':    '35.5', '4.5':  '36',
+        '5':     '36.5', '5.5':  '37.5', '6':    '38',
+        '6.5':   '38.5',
+    },
+    },
+
+    'puma': {
+        'hombre': {  # UK → ARG
+            '7':   '39.5', '7M':  '40',
+            '8':   '41',   '8M':  '41.5',
+            '9':   '42',   '9M':  '43',
+            '10':  '43.5', '10M': '44',
+            '11':  '45',
+            '12':  '46',
+            '13':  '47',
+        },
+        'mujer': {
+            '3':   '34.5', '3M':  '35',
+            '4':   '36',   '4M':  '36.5',
+            '5':   '37',   '5M':  '37.5',
+            '6':   '38',   '6M':  '39',
+            '7':   '39.5',
+        },
+        'ninos': {
+            '10k': '27',  '11k':   '28',
+            '11.5k': '29','12k':   '30',
+            '12k': '30',  '13k':   '31',
+            '1':   '32', '1M': '33',
+            '2':     '34','2M': '34.5',
+             '3':   '35', '3M': '35.5',
+            '4':     '36',
+
+        },
+    },
+
+    'fila': {
+        'hombre': {  # ARG directo
+            '38': '38', '39': '39', '40': '40', '41': '41',
+            '42': '42', '43': '43', '44': '44', '45': '45',
+            '46': '46', '47': '47',
+        },
+        'mujer': {
+            '35': '35', '36': '36', '37': '37', '38': '38',
+            '39': '39', '40': '40', '41': '41',
+        },
+        'ninos': {
+            '22': '22', '23': '23', '24': '24', '25': '25',
+            '26': '26', '27': '27', '28': '28', '29': '29',
+            '30': '30', '31': '31', '32': '32', '33': '33', '34': '34',
+        },
+    },
+
+    'reebok': {
+        'hombre': {  # Us → ARG
+            '6.5': '38',
+            '7':   '38.5', '7M': '39' , '8':   '40',
+            '8M': '40.5',   '9':  '41',
+            '9M':'42', '10':  '43', '10M': '43.5',
+            '11':  '44', '11M': '45',
+            '12':  '45.5', '12M': '46',
+        },
+        'mujer': {  # Us → ARG
+                '6': '35.5', '6M': '36',
+                '7': '36.5', '7M': '37',
+                '8': '38', '8M': '38.5',
+                '9': '39', '9M': '40',
+                '10': '40.5', '10M': '41',
+
+        },
+        'ninos': {
+            '2.5': '34',  '3':   '34.5',
+            '4':   '35',  '4.5': '35.5',
+            '5':   '36',  '5.5': '36.5',
+            '6':   '37',  '6.5': '38',
+            '7':   '38.5','7.5': '39',
+            '8':   '40',  '8.5': '41',
+            '9':   '41.5',
+        },
+    },
+
+    'under armour': {
+        'hombre': {  # US → ARG
+            '7':   '39',   '7M':  '39.5',
+            '8':   '40',   '8M':  '41',
+            '9':   '41.5', '9M':  '42',
+            '10':  '43',   '10M': '43.5',
+            '11':  '44',   '11M': '44.5',
+            '12':  '45',   '12M': '46',
+        },
+        'mujer': {
+            '5':   '34.5', '5M':  '35',
+            '6':   '35.5', '6M':  '36.5',
+            '7':   '37',   '7M':  '37.5',
+            '8':   '38',   '8M':  '39',
+            '9':   '39.5', '9M':  '40',
+            '10':  '40.5', '10M': '41',
+            '11':  '43.5', '12':  '43.5',
+        },
+    },
+
+    'asics': {
+        'hombre': {  # US → ARG
+            '8':   '40',   '8M':  '40.5',
+            '9':   '41',   '9M':  '42',
+            '10':  '42.5', '10.5':'43',
+            '11':  '43.5', '11M': '44',
+            '12':  '45',   '12M': '46',
+        },
+        'mujer': {
+            '6':   '36',   '6M':  '36',
+            '7':   '37',   '7M':  '38',
+            '8':   '38.5', '8M':  '39',
+            '9':   '40',   '9M':  '40.5',
+            '10':  '41',
+        },
+    },
+
+    'new balance': {
+        'hombre': {  # US → ARG
+            '4':   '35',   '4M':  '36',
+            '5':   '36.5', '5M':  '37',
+            '6':   '37.5', '6M':  '38.5',
+            '7':   '39',   '7M':  '39.5',
+            '8':   '40.5', '8M':  '41',
+            '9':   '41.5', '9M':  '42',
+            '10':  '43',   '10M': '43.5',
+            '11':  '44',   '11M': '44.5',
+            '12':  '45.5', '12M': '46',
+            '13':  '46.5',
+            '14':  '48',
+            '15':  '49',
+        },
+        'mujer': {
+            '5':   '34',   '5M':  '35',
+            '6':   '35.5', '6M':  '36',
+            '7':   '36.5', '7M':  '37',
+            '8':   '38',   '8M':  '39',
+            '9':   '39.5', '9M':  '40',
+            '10':  '40.5', '10M': '41.5',
+            '11':  '42',
+        },
+        'ninos': {
+            '11':  '27.5', '12':  '29',
+            '13':  '30',   '1':   '31.5',
+            '1.5': '32',   '2':   '32.5',
+            '2.5': '33',   '3':   '34',
+            '3.5': '34.5',
+        },
+    },
+
+    'salomon': {
+        'hombre': {  # UK → ARG
+            '3':   '35.5',
+            '4':   '36',   '4M':  '36.5',
+            '5':   '37',   '5M':  '37.5',
+            '6':   '38',   '6M':  '39',
+            '7':   '39.5', '7M':  '40',
+            '8':   '41',   '8M':  '41.5',
+            '9':   '42',   '9M':  '42.5',
+            '10':  '43',   '10M': '44',
+            '11':  '44.5', '11M': '45',
+            '12':  '45.5', '12M': '46',
+            '13':  '46.5', '13M': '47',
+            '14':  '47.5', '14M': '48',
+            '15':  '48.5',
+        },
+    },
+
+    'montagne': {
+        'hombre': {  # US → ARG
+            '8':   '40',   '8M':  '41',
+            '9':   '41.5', '9M':  '42',
+            '10':  '43',   '10M': '43.5',
+            '11':  '44',   '11M': '44.5',
+            '12':  '45',   '12M': '46',
+        },
+        'mujer': {
+            '6':   '36',   '6M':  '36',
+            '7':   '37',   '7M':  '37.5',
+            '8':   '38',   '8M':  '39',
+            '9':   '39.5', '9M':  '40',
+        },
+    },
+
+    'vans': {
+        'hombre': {  # US → ARG
+            '4':   '35',   '4.5': '36',
+            '5':   '36.5', '5M':  '37',
+            '6':   '38',   '6M':  '38.5',
+            '7':   '39',   '7M':  '40',
+            '8':   '40.5', '8M':  '41',
+            '9':   '42',   '9M':  '42.5',
+            '10':  '43',   '10M': '44',
+            '11':  '44.5',
+            '12':  '46',
+            '13':  '47',
+        },
+        'mujer': {
+            '5':   '34.5', '5M':  '35',
+            '6':   '36',   '6M':  '36.5',
+            '7':   '37',   '7M':  '38',
+            '8':   '38.5', '8M':  '39',
+            '9':   '40',
+        },
+        'unisex': {  # fallback
+            '4':   '35',   '4.5': '36',
+            '5':   '36.5', '5M':  '37',
+            '6':   '38',   '6M':  '38.5',
+            '7':   '39',   '7M':  '40',
+            '8':   '40.5', '8M':  '41',
+            '9':   '42',   '9M':  '42.5',
+            '10':  '43',   '10M': '44',
+            '11':  '44.5', '12':  '46', '13': '47',
+        },
+    },
+
+    'dc': {
+        'hombre': {  # US → ARG
+            '4':   '34',
+            '5':   '35.5',
+            '6':   '37.5',
+            '7':   '39',
+            '8':   '40',
+            '9':   '41.5',
+            '10':  '43',
+            '11':  '44.5',
+            '12':  '46',
+        },
+        'mujer': {
+            '5':   '34',   '5M':  '35',
+            '6':   '35.5', '6M':  '36',
+            '7':   '37',   '7M':  '38',
+            '8':   '38.5', '8M':  '39',
+            '9':   '40',   '9M':  '41',
+            '10':  '41.5',
+        },
+    },
+
+    'crocs': {
+        'hombre': {
+            'M7': '39', 'M8': '40', 'M9': '41',
+            'M10': '42', 'M11': '43', 'M12': '44', 'M13': '45',
+        },
+        'mujer': {
+            'W4': '34', 'M3/W5': '35', 'M4/W6': '36',
+            'M5/W7': '37', 'M6/W8': '38', 'M7/W9': '39',
+            'M8/W10': '40', 'M9/W11': '41', 'M10/W12': '42',
+        },
+        'ninos': {
+            'C2': '19', 'C3': '20', 'C4': '21', 'C5': '22',
+            'C6': '23', 'C7': '24', 'C8': '25', 'C9': '26',
+            'C10': '27', 'C11': '28', 'C12': '29', 'C13': '30',
+            'J1': '31', 'J2': '32', 'J3': '33',
+        },
+    },
+
+    'topper': {
+        'adulto': {  # ARG directo
+            '35': '35', '36': '36', '37': '37', '38': '38',
+            '39': '39', '40': '40', '41': '41', '42': '42',
+            '43': '43', '44': '44', '45': '45', '46': '46', '47': '47',
+        },
+        'ninos': {
+            '19': '19', '20': '20', '21': '21', '22': '22',
+            '23': '23', '24': '24', '25': '25', '26': '26',
+            '27': '27', '28': '28', '29': '29', '30': '30',
+            '31': '31', '32': '32', '33': '33', '34': '34',
+        },
+    },
+
+    'umbro': {
+        'adulto': {
+            '37': '37', '38': '38', '39': '39', '40': '40',
+            '41': '41', '42': '42', '43': '43', '44': '44',
+            '45': '45', '46': '46',
+        },
+        'ninos': {
+            '25': '25', '26': '26', '27': '27', '28': '28',
+            '29': '29', '30': '30', '31': '31', '32': '32',
+            '33': '33', '34': '34', '35': '35', '36': '36', '37': '37',
+        },
+    },
+
+    'on': {
+    'hombre': {  # UK → ARG
+        '6':   '39',   '6.5': '39.5',
+        '8':   '40.5', '8.5': '41',
+        '9':   '42',   '9.5': '42',
+        '10':   '43',   '10.5': '43.5',
+        '11':  '44',   '11.5': '45',
+        '12':  '46',
+    },
+    'mujer': {  # UK → ARG
+        '5':   '35',   '5.5': '35.5',
+        '6':   '36',   '6.5': '36.5',
+        '7':   '37',   '7.5': '37.5',
+        '8':   '38',   '8.5': '39',
+        '9':   '39.5', '9.5': '40',
+
+    },
+    },
+
+    'footy': {
+    'ninos': {
+        '22': '22', '23': '23', '24': '24', '25': '25',
+        '26': '26', '27': '27', '28': '28', '29': '29',
+        '30': '30', '31': '31', '32': '32', '33': '33',
+        '34': '34', '35': '35', '36': '36', '37': '37',
+        '38': '38',
+        },
+    },
+
+    'converse': {
+    'hombre': {
+        '33': '33',
+        '34': '34', '35': '35', '36': '36', '37': '37',
+        '38': '38', '39': '39', '40': '40', '41': '41',
+        '42': '42', '43': '43', '44': '44'
+        },
+    },
+
+    'atomik': {
+      'hombre': {
+          '40': '40', '41': '41', '42': '42', '43': '43',
+          '44': '44', '45': '45',
+          },
+      'mujer': {
+          '35': '35', '36': '36', '37': '37', '38': '38', '39': '39',
+          '40': '40'},
+      'unisex': {
+          '35': '35', '36': '36', '37': '37', '38': '38', '39': '39',
+          '40': '40',},
+      'ninos': {
+           '24': '24', '25': '25', '26': '26','27': '27',
+          '28': '28', '29': '29', '30': '30', '31': '31',
+          '32': '32', '33': '33', '34': '34', '35': '35',
+          '36': '36', '37': '37', '38': '38',
+
+          },
+    },
+    'asics ': {
+    'hombre': {
+        '38': '38', '39': '39', '40': '40', '41': '41',
+        '42': '42', '43': '43', '44': '44'
+        },
+    'mujer': {
+        '35': '35', '36': '36', '37': '37', '38': '38', '39': '39',
+        '40': '40',
+        }
+    },
+    'head': {
+    'hombre': {
+        '38': '38', '39': '39', '40': '40', '41': '41',
+        '42': '42', '43': '43', '44': '44', '45': '45'
+        },
+    'mujer': {
+        '34':'34', '35': '35', '36': '36', '37': '37', '38': '38', '39': '39',
+        '40': '40',
+        }
+    },
+
+    'addnice': {
+        'hombre': {
+            '38': '38', '39': '39', '40': '40', '41': '41',
+            '42': '42', '43': '43', '44': '44', '45': '45'
+            },
+        'mujer': {
+            '34':'34', '35': '35', '36': '36', '37': '37',
+            '38': '38', '39': '39','40': '40',
+            },
+        'ninos': {
+            '24': '24', '25': '25', '26': '26',
+            '27': '27', '28': '28', '29': '29',
+            '30': '30', '31': '31', '32': '32',
+            '33': '33', '34': '34',
+            }
+    },
+
+}
+
+# Ropa genérica (para marcas sin tabla específica de ropa)
+TALLES_ROPA_ADULTO = ['XXS','XS','S','M','L','XL','2XL','3XL']
+TALLES_ROPA_NINOS  = ['2','4','6','8','10','12','14','16']
+
+
+DIMENSIONES = {
+    'zapatillas_adulto': {'peso': 800, 'ancho': 15, 'alto': 15, 'largo': 30},
+    'zapatillas_ninos':  {'peso': 500, 'ancho': 10, 'alto': 10, 'largo': 25},
+    'indumentaria':      {'peso': 300, 'ancho': 10, 'alto': 5,  'largo': 20},
+    'accesorios':        {'peso': 250, 'ancho': 10, 'alto': 5,  'largo': 15},
+    'medias':            {'peso': 200, 'ancho': 5,  'alto': 5,  'largo': 10},
+}
+
+
+
+def convertir_talle_a_arg(talle_uk, marca, categoria_key):
+    """
+    Convierte talle UK/US → ARG.
+    talle_uk debe ser string (ej: '7', '7M', 'M8', 'C4')
+    """
+    marca_lower = marca.lower()
+    tabla_marca = TALLES.get(marca_lower)
+    if not tabla_marca:
+        return str(talle_uk)
+
+    if 'ninosJr' in categoria_key:
+        genero = 'ninosJr'
+    elif 'ninos' in categoria_key:
+        genero = 'ninos'
+    elif 'mujer' in categoria_key:
+        genero = 'mujer'
+    elif 'hombre' in categoria_key:
+        genero = 'hombre'
+    else:
+        genero = 'adulto'
+
+    tabla = (tabla_marca.get(genero)
+             or tabla_marca.get('adulto')
+             or tabla_marca.get('unisex'))
+
+    if not tabla:
+        return str(talle_uk)
+
+    return str(tabla.get(str(talle_uk), talle_uk))
+
+
+
 
 TALLES_FIELD_VALUE_IDS = {
     '31': 2511, '31.5': 2509, '32': 2313, '32.5': 2314,
@@ -439,6 +944,14 @@ async def main():
 
     # 1. Conectar Drive
     drive_service = get_drive_service()
+    resultado = drive_service.files().list(
+    pageSize=10,
+    fields="files(id,name)"
+    ).execute()
+
+    print("ARCHIVOS VISIBLES:")
+    for f in resultado.get("files", []):
+        print(f["name"])
 
     # 2. Obtener imágenes nuevas de las últimas 24h
     imagenes_nuevas = obtener_imagenes_nuevas(drive_service, horas=24)
@@ -564,12 +1077,85 @@ async def main():
 
 # Funciones de talles (copiar desde tu Colab)
 def get_talles(marca, categoria_key):
-    # ... (igual que en tu Colab)
-    return [{'uk': 'unico', 'arg': 'unico'}]  # placeholder
+    marca_lower = marca.lower()
+    talles_marca = TALLES.get(marca_lower, {})
+
+    if 'ninos' in categoria_key:
+        genero = 'ninos'
+    elif 'ninosJr' in categoria_key:
+        genero = 'ninosJr'
+    elif 'mujer' in categoria_key:
+        genero = 'mujer'
+    elif 'hombre' in categoria_key:
+        genero = 'hombre'
+    else:
+        genero = 'adulto'
+
+    tipo = 'ropa'
+    if any(x in categoria_key for x in ['zapatillas', 'botines', 'crocs', 'ojotas']):
+        tipo = 'zapatillas'
+    elif any(x in categoria_key for x in ['bolsos', 'mochilas', 'gorras', 'accesorios',
+                                           'pelotas', 'canilleras', 'guantes', 'medias',
+                                           'riñonera', 'morral']):
+        tipo = 'unico'   # ← accesorios siempre talle único
+
+    if tipo == 'unico':
+      talle_unico = talles_marca.get('talle_unico', 'unico')
+      return [{'uk': talle_unico, 'arg': talle_unico}]   # ← devuelve solo talle único
+
+    elif tipo == 'zapatillas':
+        for key in [genero, 'adulto', 'unisex']:
+            if key in talles_marca and talles_marca[key]:
+                talles_uk = list(talles_marca[key].keys())
+                break
+        else:
+            talles_uk = ['8', '8M', '9', '9M', '10', '10M', '11']
+
+        resultado = []
+        for t in talles_uk:
+            arg = convertir_talle_a_arg(str(t), marca, categoria_key)
+            resultado.append({'uk': str(t), 'arg': arg})
+        return resultado
+
+    else:
+        # ROPA — buscar clave específica de ropa, no de zapatillas
+        ropa_keys = [f'ropa_{genero}', 'ropa_adulto', f'ropa_ninos']
+        for key in ropa_keys:
+            if key in talles_marca and talles_marca[key]:
+                t = talles_marca[key]
+                if isinstance(t, list):
+                    return [{'uk': str(x), 'arg': str(x)} for x in t]
+
+        # Fallback genérico — nunca usar talles de zapatillas para ropa
+        if 'ninos' in categoria_key:
+            return [{'uk': t, 'arg': t} for t in TALLES_ROPA_NINOS]
+        return [{'uk': t, 'arg': t} for t in TALLES_ROPA_ADULTO]
 
 def get_dimensiones(categoria_key):
-    # ... (igual que en tu Colab)
-    return {'peso': 500, 'ancho': 10, 'alto': 10, 'largo': 25}  # placeholder
+    if 'ninos' in categoria_key and any(x in categoria_key for x in ['zapatillas', 'botines']):
+        return DIMENSIONES['zapatillas_ninos']
+    elif any(x in categoria_key for x in ['zapatillas', 'botines', 'crocs']):
+        return DIMENSIONES['zapatillas_adulto']
+    elif 'medias' in categoria_key:
+        return DIMENSIONES['medias']
+    elif any(x in categoria_key for x in ['remeras', 'shorts', 'buzos', 'camperas',
+                                            'calzas', 'pantalones', 'tops', 'mallas']):
+        return DIMENSIONES['indumentaria']
+    else:
+        return DIMENSIONES['accesorios']
+
+
+print("✅ Tabla de conversión de talles cargada")
+print()
+print("Test Nike Hombre  US 7  → ARG:", convertir_talle_a_arg('7',  'nike',  'hombre_zapatillas'))
+print("Test Nike Hombre  US 7M → ARG:", convertir_talle_a_arg('7M', 'nike',  'hombre_zapatillas'))
+print("Test Nike Mujer   US 7  → ARG:", convertir_talle_a_arg('7',  'nike',  'mujer_zapatillas'))
+print("Test Puma Hombre  UK 9  → ARG:", convertir_talle_a_arg('9',  'puma',  'hombre_zapatillas'))
+print("Test Adidas H     UK 8  → ARG:", convertir_talle_a_arg('8',  'adidas','hombre_zapatillas'))
+print("Test Salomon H    UK 9  → ARG:", convertir_talle_a_arg('9',  'salomon','hombre_zapatillas'))
+print("Test Vans Unisex  US 8  → ARG:", convertir_talle_a_arg('8',  'vans',  'hombre_zapatillas'))
+print("Test Crocs Hombre M9    → ARG:", convertir_talle_a_arg('M9', 'crocs', 'hombre_zapatillas'))
+print("Test addnice Hombre M9    → ARG:", convertir_talle_a_arg('24', 'addnice', 'ninos_zapatillas'))
 
 
 if __name__ == '__main__':
