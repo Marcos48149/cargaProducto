@@ -764,12 +764,27 @@ Analizá esta imagen de un producto de la marca {marca} con código {codigo_sku}
 Categorías disponibles (elegí la más exacta):
 {categorias_str}
 
-Devolvé SOLO este JSON sin texto extra:
+Te voy a pasar iamgenes de productos que debo cargar a mi web,
+cada imagen esta nombrada con su codigo ej: ADI-445658, Y NECESITO QUE ENCUENTRES EL MODELO EXACTO DE CADA ARTICULO 
+Y ME ENTREGUES UN JSON COMO EL QUE TE ESPECIFICO ABAJO , LOS CAMPOS IMPORTANTES QUE TIENES QUE PRESTAR ATENCION
+AL COMPLETAR SON ESTOS: 'CODIGO_SKU': 'MODELO': 'CATEGORIA': 'MARCA': ES IMPORTANTE QUE 
+EN MODELO COLOQUES EL TITULO DEL PRODCUTO Y QUE TENGA EL NOMBRE DEL MODELO EXACTO DEL ARTICULO,
+
+Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PARA TU CONTEXTO):
 {{
-  "modelo": "[nombre del modelo exacto]",
-  "color": "[color principal en español]",
-  "categoria": "[una categoria de la lista de arriba]",
-  "talles_manuales": null
+   
+        "CODIGO_SKU":      "ASI-1042A291401",
+        "MODELO":          "Zapatillas Asics Gel-Backhand 2 Clay Mujer",
+        "COLOR":           "Celeste/Azul",
+        "CATEGORIA":       "mujer_zapatillas",
+        "MARCA":           "asics",
+        "PRECIO":          0,
+        "PRECIO_TACHADO":  None,
+        "WAREHOUSE_ID":    "1_1",
+        "STOCK_POR_TALLE": None,
+        "TALLES_MANUALES": None,
+    
+
 }}"""
 
     response = model.generate_content([imagen_pil, prompt])
