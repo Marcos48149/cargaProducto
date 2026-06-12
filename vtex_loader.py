@@ -1027,6 +1027,7 @@ async def main():
             # Gemini analiza
             log.info('🤖 Analizando con OpenAI...')
             datos = analizar_producto_con_gemini(codigo_sku, url_principal, marca)
+            log.info(f"JSON IA: {datos}")
 
             categoria = datos['categoria']
             if categoria not in CATEGORIAS:
