@@ -558,7 +558,12 @@ TALLES = {
     },
 
     'topper': {
-        'adulto': {  # ARG directo
+        'hombre': {  # ARG directo
+            '35': '35', '36': '36', '37': '37', '38': '38',
+            '39': '39', '40': '40', '41': '41', '42': '42',
+            '43': '43', '44': '44', '45': '45', '46': '46', '47': '47',
+        },
+        'mujer': {  # ARG directo
             '35': '35', '36': '36', '37': '37', '38': '38',
             '39': '39', '40': '40', '41': '41', '42': '42',
             '43': '43', '44': '44', '45': '45', '46': '46', '47': '47',
@@ -881,34 +886,40 @@ async def subir_skus_async(producto_id, talles, codigo_sku, urls_imagenes,
         'Accept':              'application/json',
     }
 
-    async with aiohttp.ClientSession(headers=headers_async) as session:
+    sem = asyncio.Semaphore(3)
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(headers=headers_async, timeout=timeout) as session:
         # Crear SKUs
         async def crear_sku(talle):
-            payload = {
-                'ProductId':          producto_id,
-                'Name':               str(talle['uk']),
-                'RefId':              f'{codigo_sku} {talle["uk"]}',
-                'ManufacturerCode':   codigo_sku,
-                'IsActive':           False,
-                'ActivateIfPossible': True,
-                'IsKit':              False,
-                'PackagedWeightKg':   dim['peso'] / 1000,
-                'PackagedWidth':      dim['ancho'],
-                'PackagedHeight':     dim['alto'],
-                'PackagedLength':     dim['largo'],
-            }
-            async with session.post(
-                f'{VTEX_BASE_URL}/api/catalog/pvt/stockkeepingunit',
-                json=payload
-            ) as r:
-                if r.status in [200, 201]:
-                    data = await r.json()
-                    return data['Id']
-                return None
+            async with sem:
+                payload = {
+                    'ProductId':          producto_id,
+                    'Name':               str(talle['uk']),
+                    'RefId':              f'{codigo_sku} {talle["uk"]}',
+                    'ManufacturerCode':   codigo_sku,
+                    'IsActive':           False,
+                    'ActivateIfPossible': True,
+                    'IsKit':              False,
+                    'PackagedWeightKg':   dim['peso'] / 1000,
+                    'PackagedWidth':      dim['ancho'],
+                    'PackagedHeight':     dim['alto'],
+                    'PackagedLength':     dim['largo'],
+                }
+                async with session.post(
+                    f'{VTEX_BASE_URL}/api/catalog/pvt/stockkeepingunit',
+                    json=payload
+                ) as r:
+                    if r.status in [200, 201]:
+                        data = await r.json()
+                        log.info(f'  ✅ SKU {talle["uk"]} creado (ID {data["Id"]})')
+                        return data['Id']
+                    texto = await r.text()
+                    log.error(f'  ❌ Error creando SKU {talle["uk"]}: {r.status} — {texto[:200]}')
+                    return None
 
         sku_ids_raw = await asyncio.gather(*[crear_sku(t) for t in talles])
         skus_ok = [(talles[i], sid) for i, sid in enumerate(sku_ids_raw) if sid]
-        log.info(f'  ✅ {len(skus_ok)} SKUs creados')
+        log.info(f'  ✅ {len(skus_ok)}/{len(talles)} SKUs creados')
 
         # Precio y stock
         async def set_precio(sid):
@@ -1051,10 +1062,20 @@ async def main():
 
             prompt_gpt = (
                 f"Sos redactor e-commerce argentino para Showsport.\n"
-                f"Producto: {datos['modelo']} | Marca: {marca.title()} | "
-                f"Color: {datos['color']} | Género: {genero}\n"
+                f"Datos del producto:\n"
+                f"  - Modelo completo (extraído por IA de la imagen): {datos['modelo']}\n"
+                f"  - Marca: {marca.title()}\n"
+                f"  - Color: {datos['color']}\n"
+                f"  - Género: {genero}\n"
+                f"  - Código: {codigo_sku}\n\n"
+                f"Instrucciones para el título:\n"
+                f"- El modelo completo puede incluir tipo de artículo, marca y género.\n"
+                f"- El título final debe tener este orden: Tipo de artículo + Marca + Modelo (sin marca ni género repetidos) + Color + Género.\n"
+                f"- NO repetir palabras. Asegurate de que marca y género aparezcan UNA SOLA VEZ.\n"
+                f"- Ejemplo correcto: 'Campera Puma Running Hooded Woven Jacket Vino/Rosa Mujer'\n"
+                f"- Ejemplo INCORRECTO: 'Puma Campera Puma Running Hooded Woven Jacket Mujer Vino/Rosa Mujer'\n\n"
                 f"Generá este JSON sin texto extra:\n"
-                f'{{"titulo":"{marca.title()} {datos["modelo"]} {datos["color"].title()} {genero}","descripcion":"[4 párrafos]","palabras_clave":"[keywords]","url_slug":"[slug]-{codigo_sku}"}}'
+                f'{{"titulo":"[título limpio sin repeticiones]","descripcion":"[4 párrafos describiendo el producto]","palabras_clave":"[keywords separadas por coma]","url_slug":"[slug]-{codigo_sku}"}}'
             )
             resp = client_oai.chat.completions.create(
                 model='gpt-4o-mini',
