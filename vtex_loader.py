@@ -801,7 +801,7 @@ Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PA
 }}"""
 
     response = client_oai.chat.completions.create(
-        model="google/gemini-2.0-flash-exp:free",
+        model="qwen/qwen2.5-vl-72b-instruct",
         messages=[
             {
                 "role": "user",
