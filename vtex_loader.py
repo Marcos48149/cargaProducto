@@ -805,7 +805,11 @@ Devolvé SOLO UN JSON DE ESTA FORMA (sin texto extra, sin markdown):
         ],
         max_tokens=800
     )
-    texto = response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    if not content:
+        log.error(f'  ❌ IA devolvió contenido vacío — probablemente sin créditos en OpenRouter')
+        raise ValueError('IA devolvió contenido vacío')
+    texto = content.strip()
     log.info(f'  📝 Respuesta cruda IA (primeros 300): {texto[:300]}')
 
     if '```' in texto:
@@ -1078,7 +1082,11 @@ async def main():
                 messages=[{'role': 'user', 'content': prompt_gpt}],
                 max_tokens=600
             )
-            texto = resp.choices[0].message.content.strip()
+            content = resp.choices[0].message.content
+            if not content:
+                log.error(f'  ❌ GPT devolvió contenido vacío')
+                raise ValueError('GPT devolvió contenido vacío')
+            texto = content.strip()
             if '```' in texto:
                 texto = texto.split('```')[1]
                 if texto.startswith('json'):
