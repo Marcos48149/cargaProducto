@@ -274,10 +274,8 @@ TALLES = {
             '5':   '36.5', '5M': '37.5',
             '6':   '38',   '6M': '38.5',
             '7':   '39',   '7M': '39.5',
-            '8':   '40',   '8M': '41',
-            '9':   '41.5', '9M': '42',
-            '10':  '43',   '10M':'43.5',
-            '11':  '44',   '11M':'45',
+            '8':   '40',  
+            
         },
         'unisex': {
             '3':   '34.5', '3M': '34.5',
@@ -777,12 +775,10 @@ Analizá esta imagen de un producto de la marca {marca} con código {codigo_sku}
 Categorías disponibles (elegí la más exacta):
 {categorias_str}
 
-Identificá el modelo exacto mirando la imagen y el código del producto.
 Prestá atención al género del producto (hombre/mujer/ninos).
 Devolvé SOLO UN JSON DE ESTA FORMA (sin texto extra, sin markdown):
 {{
         "CODIGO_SKU":      "{codigo_sku}",
-        "MODELO":          "[modelo exacto con tipo, marca y género]",
         "COLOR":           "[colores principales separados por /]",
         "CATEGORIA":       "[categoría exacta de la lista]",
         "MARCA":           "{marca}",
@@ -1057,11 +1053,10 @@ async def main():
                 log.warning(f'Categoría inválida: {categoria} — saltando')
                 continue
 
-            log.info(f'   Modelo: {datos["modelo"]}')
             log.info(f'   Color:  {datos["color"]}')
             log.info(f'   Cat:    {categoria}')
 
-            # Generar contenido con GPT-4o
+            # Generar contenido con Qwen
             from openai import OpenAI
             client_oai = OpenAI(api_key=OPENAI_API_KEY, base_url="https://openrouter.ai/api/v1")
             genero = ('Mujer' if 'mujer' in categoria else
@@ -1070,14 +1065,15 @@ async def main():
 
             prompt_gpt = (
                 f"Sos redactor e-commerce argentino para Showsport.\n"
+                f"El código del producto es {codigo_sku} y la marca es {marca.title()}.\n"
+                f"Identificá el modelo exacto a partir del código. "
+                f"Por ejemplo, si el código es ADI-JP8445, el modelo correcto sería 'Fabela Rise 2'.\n"
                 f"Datos del producto:\n"
-                f"  - Modelo completo (extraído por IA de la imagen): {datos['modelo']}\n"
                 f"  - Marca: {marca.title()}\n"
                 f"  - Color: {datos['color']}\n"
                 f"  - Género: {genero}\n"
                 f"  - Código: {codigo_sku}\n\n"
                 f"Instrucciones para el título:\n"
-                f"- El modelo completo puede incluir tipo de artículo, marca y género.\n"
                 f"- El título final debe tener este orden: Tipo de artículo + Marca + Modelo (sin marca ni género repetidos) + Color + Género.\n"
                 f"- NO repetir palabras. Asegurate de que marca y género aparezcan UNA SOLA VEZ.\n"
                 f"- Ejemplo correcto: 'Campera Puma Running Hooded Woven Jacket Vino/Rosa Mujer'\n"
