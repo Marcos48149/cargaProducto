@@ -30,6 +30,6 @@ jobs:
           VTEX_ACCOUNT: ${{ secrets.VTEX_ACCOUNT }}
           VTEX_APP_KEY: ${{ secrets.VTEX_APP_KEY }}
           VTEX_APP_TOKEN: ${{ secrets.VTEX_APP_TOKEN }}
-           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python vtex_loader.py
