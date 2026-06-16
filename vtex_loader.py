@@ -261,7 +261,7 @@ TALLES = {
 
     'adidas': {
         'hombre': {  # UK → ARG  (mismo para mujer adulto)
-
+            '6': '38', '6M': '38.5'
             '7':   '39',   '7M': '39.5',
             '8':   '40',   '8M': '41',
             '9':   '41.5', '9M': '42',
@@ -1085,12 +1085,15 @@ async def main():
             resp = client_oai.chat.completions.create(
                 model='qwen/qwen3-32b',
                 messages=[{'role': 'user', 'content': prompt_gpt}],
-                max_tokens=600
+                max_tokens=1000
             )
             content = resp.choices[0].message.content
+            finito = resp.choices[0].finish_reason
             if not content:
-                log.error(f'  ❌ GPT devolvió contenido vacío')
-                raise ValueError('GPT devolvió contenido vacío')
+                log.error(f'  ❌ GPT devolvió contenido vacío (finish_reason: {finito})')
+                raise ValueError(f'GPT devolvió contenido vacío (finish_reason: {finito})')
+            if finito == 'length':
+                log.warning(f'  ⚠️ Respuesta truncada por límite de tokens (finish_reason: length)')
             texto = content.strip()
             if '```' in texto:
                 texto = texto.split('```')[1]
