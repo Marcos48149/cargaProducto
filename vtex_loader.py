@@ -1074,8 +1074,8 @@ async def main():
                 f"- NO repetir palabras. Asegurate de que marca y género aparezcan UNA SOLA VEZ.\n"
                 f"- Ejemplo correcto: 'Campera Puma Running Hooded Woven Jacket Vino/Rosa Mujer'\n"
                 f"- Ejemplo INCORRECTO: 'Puma Campera Puma Running Hooded Woven Jacket Mujer Vino/Rosa Mujer'\n\n"
-                f"Generá este JSON sin texto extra:\n"
-                f'{{"titulo":"[título limpio sin repeticiones]","descripcion":"[4 párrafos describiendo el producto]","palabras_clave":"[keywords separadas por coma]","url_slug":"[slug]-{codigo_sku}"}}'
+                f"Generá este JSON en UNA SOLA LÍNEA, sin texto extra:\n"
+                f'{{"titulo":"[título limpio sin repeticiones]","descripcion":"[4 párrafos en una sola línea, usa \\n para separar]","palabras_clave":"[keywords separadas por coma]","url_slug":"[slug]-{codigo_sku}"}}'
             )
             resp = client_oai.chat.completions.create(
                 model='qwen/qwen3-32b',
@@ -1091,7 +1091,17 @@ async def main():
                 texto = texto.split('```')[1]
                 if texto.startswith('json'):
                     texto = texto[4:]
-            contenido = json.loads(texto.strip())
+            else:
+                match = re.search(r'\{.*\}', texto, re.DOTALL)
+                if match:
+                    texto = match.group()
+            texto = texto.strip()
+            try:
+                contenido = json.loads(texto)
+            except json.JSONDecodeError as e:
+                log.error(f'  ❌ JSON inválido en título: {e}')
+                log.error(f'  📄 Texto: {texto[:500]}')
+                raise
 
             # Crear producto en VTEX
             producto_id = crear_producto(
