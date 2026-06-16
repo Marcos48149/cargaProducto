@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from io import BytesIO
 
+import re
 import requests
 from PIL import Image
 from dotenv import load_dotenv
@@ -793,10 +794,10 @@ Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PA
         "CATEGORIA":       "mujer_zapatillas",
         "MARCA":           "asics",
         "PRECIO":          0,
-        "PRECIO_TACHADO":  None,
+        "PRECIO_TACHADO":  null,
         "WAREHOUSE_ID":    "1_1",
-        "STOCK_POR_TALLE": None,
-        "TALLES_MANUALES": None
+        "STOCK_POR_TALLE": null,
+        "TALLES_MANUALES": null
 }}"""
 
     response = client_oai.chat.completions.create(
@@ -820,15 +821,25 @@ Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PA
         ],
         max_tokens=800
     )
-    print(response.choices[0].message.content[:300])
     texto = response.choices[0].message.content.strip()
+    log.info(f'  📝 Respuesta cruda IA (primeros 300): {texto[:300]}')
 
     if '```' in texto:
         texto = texto.split('```')[1]
         if texto.startswith('json'):
             texto = texto[4:]
+    else:
+        match = re.search(r'\{.*\}', texto, re.DOTALL)
+        if match:
+            texto = match.group()
 
-    return json.loads(texto.strip())
+    texto = texto.strip()
+    try:
+        return json.loads(texto)
+    except json.JSONDecodeError as e:
+        log.error(f'  ❌ JSON inválido — {e}')
+        log.error(f'  📄 Texto que se intentó parsear: {texto[:500]}')
+        raise
 
 # ── VTEX — funciones principales ─────────────────────────────
 def crear_producto(titulo, descripcion, categoria_key, marca_key, codigo_ref,
