@@ -765,7 +765,8 @@ TALLES_FIELD_VALUE_IDS_NINOS = {
 from openai import OpenAI
 
 client_oai = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    base_url="https://openrouter.ai/api/v1"
 )
 
 def analizar_producto_con_gemini(codigo_sku, url_imagen, marca):
@@ -799,7 +800,7 @@ Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PA
 }}"""
 
     response = client_oai.chat.completions.create(
-        model="gpt-4.1-mini",
+        model="qwen/qwen2.5-vl-72b-instruct",
         messages=[
             {
                 "role": "user",
@@ -819,7 +820,7 @@ Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PA
         ],
         max_tokens=800
     )
-
+    print(response.choices[0].message.content[:300])
     texto = response.choices[0].message.content.strip()
 
     if '```' in texto:
