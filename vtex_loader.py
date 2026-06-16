@@ -1079,7 +1079,7 @@ async def main():
                 f'{{"titulo":"[título limpio sin repeticiones]","descripcion":"[4 párrafos describiendo el producto]","palabras_clave":"[keywords separadas por coma]","url_slug":"[slug]-{codigo_sku}"}}'
             )
             resp = client_oai.chat.completions.create(
-                model='gpt-4o-mini',
+                model='qwen/qwen3-32b',
                 messages=[{'role': 'user', 'content': prompt_gpt}],
                 max_tokens=600
             )
