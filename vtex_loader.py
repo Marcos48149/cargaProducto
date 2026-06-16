@@ -905,17 +905,22 @@ async def subir_skus_async(producto_id, talles, codigo_sku, urls_imagenes,
                     'PackagedHeight':     dim['alto'],
                     'PackagedLength':     dim['largo'],
                 }
-                async with session.post(
-                    f'{VTEX_BASE_URL}/api/catalog/pvt/stockkeepingunit',
-                    json=payload
-                ) as r:
-                    if r.status in [200, 201]:
-                        data = await r.json()
-                        log.info(f'  ✅ SKU {talle["uk"]} creado (ID {data["Id"]})')
-                        return data['Id']
-                    texto = await r.text()
-                    log.error(f'  ❌ Error creando SKU {talle["uk"]}: {r.status} — {texto[:200]}')
-                    return None
+                for intento in range(3):
+                    async with session.post(
+                        f'{VTEX_BASE_URL}/api/catalog/pvt/stockkeepingunit',
+                        json=payload
+                    ) as r:
+                        if r.status in [200, 201]:
+                            data = await r.json()
+                            log.info(f'  ✅ SKU {talle["uk"]} creado (ID {data["Id"]})')
+                            return data['Id']
+                        if r.status == 500 and intento < 2:
+                            log.warning(f'  ⚠️ SKU {talle["uk"]} error 500 (intento {intento+1}/3), reintentando...')
+                            await asyncio.sleep(1)
+                            continue
+                        texto = await r.text()
+                        log.error(f'  ❌ Error creando SKU {talle["uk"]}: {r.status} — {texto[:200]}')
+                        return None
 
         sku_ids_raw = await asyncio.gather(*[crear_sku(t) for t in talles])
         skus_ok = [(talles[i], sid) for i, sid in enumerate(sku_ids_raw) if sid]
