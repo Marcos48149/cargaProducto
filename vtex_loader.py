@@ -144,7 +144,7 @@ def hacer_publico(drive_service, file_id):
         ).execute()
     except Exception:
         pass
-    return f"https://drive.google.com/uc?export=view&id={file_id}"
+    return f"https://drive.google.com/uc?export=download&id={file_id}"
 
 
 def buscar_todas_imagenes_sku(drive_service, sku, carpeta_id):
@@ -791,7 +791,8 @@ Devolvé SOLO UN JSON DE ESTA FORMA (sin texto extra, sin markdown):
         "TALLES_MANUALES": null
 }}"""
 
-    img_data = httpx.get(url_imagen).content
+    img_data = httpx.get(url_imagen, follow_redirects=True,
+        headers={'User-Agent': 'Mozilla/5.0'}).content
     img = Image.open(BytesIO(img_data))
 
     model = genai.GenerativeModel("gemini-2.0-flash-exp")
