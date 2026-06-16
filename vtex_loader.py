@@ -10,6 +10,7 @@ import asyncio
 import aiohttp
 import base64
 import time
+import httpx
 import logging
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -21,7 +22,7 @@ from PIL import Image
 from dotenv import load_dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-#import google.generativeai as genai
+import google.generativeai as genai
 
 from openai import OpenAI
 
@@ -56,8 +57,8 @@ client_oai = OpenAI(
 )
 
 OPENAI_API_KEY = os.getenv('OPENROUTER_API_KEY')
-#GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-#genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+genai.configure(api_key=GEMINI_API_KEY)
 
 WAREHOUSE_ID = '1_1'
 
@@ -763,12 +764,6 @@ TALLES_FIELD_VALUE_IDS_NINOS = {
 
 
 # ── Gemini — analizar producto ────────────────────────────────
-from openai import OpenAI
-
-client_oai = OpenAI(
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    base_url="https://openrouter.ai/api/v1"
-)
 
 def analizar_producto_con_gemini(codigo_sku, url_imagen, marca):
 
@@ -780,19 +775,15 @@ Analizá esta imagen de un producto de la marca {marca} con código {codigo_sku}
 Categorías disponibles (elegí la más exacta):
 {categorias_str}
 
-Te voy a pasar iamgenes de productos que debo cargar a mi web,
-cada imagen esta nombrada con su codigo ej: ADI-445658, Y NECESITO QUE ENCUENTRES EL MODELO EXACTO DE CADA ARTICULO
-Y ME ENTREGUES UN JSON COMO EL QUE TE ESPECIFICO ABAJO , LOS CAMPOS IMPORTANTES QUE TIENES QUE PRESTAR ATENCION
-AL COMPLETAR SON ESTOS: 'CODIGO_SKU': 'MODELO': 'CATEGORIA': 'MARCA': ES IMPORTANTE QUE
-EN MODELO COLOQUES EL TITULO DEL PRODCUTO Y QUE TENGA EL NOMBRE DEL MODELO EXACTO DEL ARTICULO,
-
-Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PARA TU CONTEXTO):
+Identificá el modelo exacto mirando la imagen y el código del producto.
+Prestá atención al género del producto (hombre/mujer/ninos).
+Devolvé SOLO UN JSON DE ESTA FORMA (sin texto extra, sin markdown):
 {{
-        "CODIGO_SKU":      "ASI-1042A291401",
-        "MODELO":          "Zapatillas Asics Gel-Backhand 2 Clay Mujer",
-        "COLOR":           "Celeste/Azul",
-        "CATEGORIA":       "mujer_zapatillas",
-        "MARCA":           "asics",
+        "CODIGO_SKU":      "{codigo_sku}",
+        "MODELO":          "[modelo exacto con tipo, marca y género]",
+        "COLOR":           "[colores principales separados por /]",
+        "CATEGORIA":       "[categoría exacta de la lista]",
+        "MARCA":           "{marca}",
         "PRECIO":          0,
         "PRECIO_TACHADO":  null,
         "WAREHOUSE_ID":    "1_1",
@@ -800,28 +791,12 @@ Devolvé SOLO UN JSON DE ESTA FORMA(EL JSON DE ACA ABAJO ES A MODO DE EJEMPLO PA
         "TALLES_MANUALES": null
 }}"""
 
-    response = client_oai.chat.completions.create(
-        model="qwen/qwen2.5-vl-72b-instruct",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": prompt
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": url_imagen
-                        }
-                    }
-                ]
-            }
-        ],
-        max_tokens=800
-    )
-    texto = response.choices[0].message.content.strip()
+    img_data = httpx.get(url_imagen).content
+
+    model = genai.GenerativeModel("gemini-2.0-flash-exp")
+    response = model.generate_content([prompt, img_data])
+
+    texto = response.text.strip()
     log.info(f'  📝 Respuesta cruda IA (primeros 300): {texto[:300]}')
 
     if '```' in texto:
