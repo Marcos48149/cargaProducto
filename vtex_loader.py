@@ -10,7 +10,6 @@ import asyncio
 import aiohttp
 import base64
 import time
-import httpx
 import logging
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -22,7 +21,7 @@ from PIL import Image
 from dotenv import load_dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import google.generativeai as genai
+#import google.generativeai as genai
 
 from openai import OpenAI
 
@@ -57,8 +56,8 @@ client_oai = OpenAI(
 )
 
 OPENAI_API_KEY = os.getenv('OPENROUTER_API_KEY')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-genai.configure(api_key=GEMINI_API_KEY)
+#GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+#genai.configure(api_key=GEMINI_API_KEY)
 
 WAREHOUSE_ID = '1_1'
 
@@ -791,14 +790,22 @@ Devolvé SOLO UN JSON DE ESTA FORMA (sin texto extra, sin markdown):
         "TALLES_MANUALES": null
 }}"""
 
-    img_data = httpx.get(url_imagen, follow_redirects=True,
-        headers={'User-Agent': 'Mozilla/5.0'}).content
-    img = Image.open(BytesIO(img_data))
-
-    model = genai.GenerativeModel("gemini-2.0-flash-001")
-    response = model.generate_content([prompt, img])
-
-    texto = response.text.strip()
+    from openai import OpenAI
+    client = OpenAI(api_key=OPENAI_API_KEY, base_url="https://openrouter.ai/api/v1")
+    response = client.chat.completions.create(
+        model="google/gemini-3.1-flash-lite",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": url_imagen}}
+                ]
+            }
+        ],
+        max_tokens=800
+    )
+    texto = response.choices[0].message.content.strip()
     log.info(f'  📝 Respuesta cruda IA (primeros 300): {texto[:300]}')
 
     if '```' in texto:
