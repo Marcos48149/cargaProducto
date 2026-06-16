@@ -792,9 +792,10 @@ Devolvé SOLO UN JSON DE ESTA FORMA (sin texto extra, sin markdown):
 }}"""
 
     img_data = httpx.get(url_imagen).content
+    img = Image.open(BytesIO(img_data))
 
     model = genai.GenerativeModel("gemini-2.0-flash-exp")
-    response = model.generate_content([prompt, img_data])
+    response = model.generate_content([prompt, img])
 
     texto = response.text.strip()
     log.info(f'  📝 Respuesta cruda IA (primeros 300): {texto[:300]}')
