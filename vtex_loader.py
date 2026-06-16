@@ -795,7 +795,7 @@ Devolvé SOLO UN JSON DE ESTA FORMA (sin texto extra, sin markdown):
         headers={'User-Agent': 'Mozilla/5.0'}).content
     img = Image.open(BytesIO(img_data))
 
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
+    model = genai.GenerativeModel("gemini-2.0-flash-001")
     response = model.generate_content([prompt, img])
 
     texto = response.text.strip()
