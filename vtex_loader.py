@@ -763,36 +763,46 @@ TALLES_FIELD_VALUE_IDS_NINOS = {
 }
 
 
-# ── Gemini — analizar producto ────────────────────────────────
+# ── GPT-4o-mini — analizar producto (única IA) ───────────────
 
-def analizar_producto_con_gemini(codigo_sku, url_imagen, marca):
+def analizar_producto_con_gpt(codigo_sku, url_imagen, marca):
 
     categorias_str = '\n'.join(f'  - {c}' for c in CATEGORIAS.keys())
 
-    prompt = f"""Sos un experto en categorización de productos deportivos.
-Analizá esta imagen de un producto de la marca {marca} con código {codigo_sku}.
+    prompt = f"""Sos un experto en productos deportivos de una tienda e-commerce argentina llamada Showsport.
+Analizá esta imagen del producto con código {codigo_sku} de la marca {marca}.
 
 Categorías disponibles (elegí la más exacta):
 {categorias_str}
 
-Prestá atención al género del producto (hombre/mujer/ninos).
-Devolvé SOLO UN JSON DE ESTA FORMA (sin texto extra, sin markdown):
+Devolvé SOLO UN JSON, sin texto extra, sin markdown:
 {{
-        "CODIGO_SKU":      "{codigo_sku}",
-        "COLOR":           "[colores principales separados por /]",
-        "CATEGORIA":       "[categoría exacta de la lista]",
-        "MARCA":           "{marca}",
-        "PRECIO":          0,
-        "PRECIO_TACHADO":  null,
-        "WAREHOUSE_ID":    "1_1",
-        "STOCK_POR_TALLE": null,
-        "TALLES_MANUALES": null
-}}"""
+    "CODIGO_SKU":      "{codigo_sku}",
+    "COLOR":           "[colores principales separados por /]",
+    "CATEGORIA":       "[categoría exacta de la lista]",
+    "MARCA":           "{marca}",
+    "TITULO":          "[título completo sin repeticiones]",
+    "DESCRIPCION":     "[4 párrafos persuasivos, usa \\n para separarlos, en una sola línea]",
+    "PALABRAS_CLAVE":  "[keywords separadas por coma]",
+    "URL_SLUG":        "[slug del producto]-{codigo_sku}",
+    "PRECIO":          0,
+    "PRECIO_TACHADO":  null,
+    "WAREHOUSE_ID":    "1_1",
+    "STOCK_POR_TALLE": null,
+    "TALLES_MANUALES": null
+}}
+
+Reglas para el título:
+- Identificá el modelo exacto usando el código del producto (ej: ADI-JP8445 → Fabela Rise 2).
+- Orden: Tipo de artículo + Marca + Modelo (sin repetir marca ni género) + Color + Género.
+- NO repetir palabras. Cada palabra (marca, género, tipo) debe aparecer UNA SOLA VEZ.
+- Ejemplo correcto: "Campera Puma Running Hooded Woven Jacket Vino/Rosa Mujer"
+- Ejemplo INCORRECTO: "Puma Campera Puma Running Hooded Woven Jacket Mujer Vino/Rosa Mujer"."""
 
     from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY, base_url="https://openrouter.ai/api/v1")
     response = client.chat.completions.create(
-        model="google/gemini-3.1-flash-lite",
+        model="openai/gpt-4o-mini",
         messages=[
             {
                 "role": "user",
@@ -802,11 +812,11 @@ Devolvé SOLO UN JSON DE ESTA FORMA (sin texto extra, sin markdown):
                 ]
             }
         ],
-        max_tokens=800
+        max_tokens=1200
     )
     content = response.choices[0].message.content
     if not content:
-        log.error(f'  ❌ IA devolvió contenido vacío — probablemente sin créditos en OpenRouter')
+        log.error(f'  ❌ IA devolvió contenido vacío')
         raise ValueError('IA devolvió contenido vacío')
     texto = content.strip()
     log.info(f'  📝 Respuesta cruda IA (primeros 300): {texto[:300]}')
@@ -1039,9 +1049,9 @@ async def main():
             # URL imagen principal para Gemini
             url_principal = hacer_publico(drive_service, item['file_id'])
 
-            # Gemini analiza
-            log.info('🤖 Analizando con OpenAI...')
-            datos = analizar_producto_con_gemini(codigo_sku, url_principal, marca)
+            # GPT-4o-mini analiza todo (imagen + código)
+            log.info('🤖 Analizando con GPT-4o-mini...')
+            datos = analizar_producto_con_gpt(codigo_sku, url_principal, marca)
             log.info(f"JSON IA: {datos}")
             datos = {
                 k.lower(): v
@@ -1053,72 +1063,19 @@ async def main():
                 log.warning(f'Categoría inválida: {categoria} — saltando')
                 continue
 
+            log.info(f'   Título: {datos["titulo"][:80]}...')
             log.info(f'   Color:  {datos["color"]}')
             log.info(f'   Cat:    {categoria}')
 
-            # Generar contenido con Qwen
-            from openai import OpenAI
-            client_oai = OpenAI(api_key=OPENAI_API_KEY, base_url="https://openrouter.ai/api/v1")
-            genero = ('Mujer' if 'mujer' in categoria else
-                      'Niños' if 'ninos' in categoria else
-                      'Unisex' if 'unisex' in categoria else 'Hombre')
-
-            prompt_gpt = (
-                f"Sos redactor e-commerce argentino para Showsport.\n"
-                f"El código del producto es {codigo_sku} y la marca es {marca.title()}.\n"
-                f"Identificá el modelo exacto a partir del código. "
-                f"Por ejemplo, si el código es ADI-JP8445, el modelo correcto sería 'Fabela Rise 2'.\n"
-                f"Datos del producto:\n"
-                f"  - Marca: {marca.title()}\n"
-                f"  - Color: {datos['color']}\n"
-                f"  - Género: {genero}\n"
-                f"  - Código: {codigo_sku}\n\n"
-                f"Instrucciones para el título:\n"
-                f"- El título final debe tener este orden: Tipo de artículo + Marca + Modelo (sin marca ni género repetidos) + Color + Género.\n"
-                f"- NO repetir palabras. Asegurate de que marca y género aparezcan UNA SOLA VEZ.\n"
-                f"- Ejemplo correcto: 'Campera Puma Running Hooded Woven Jacket Vino/Rosa Mujer'\n"
-                f"- Ejemplo INCORRECTO: 'Puma Campera Puma Running Hooded Woven Jacket Mujer Vino/Rosa Mujer'\n\n"
-                f"Generá este JSON en UNA SOLA LÍNEA, sin texto extra:\n"
-                f'{{"titulo":"[título limpio sin repeticiones]","descripcion":"[4 párrafos en una sola línea, usa \\n para separar]","palabras_clave":"[keywords separadas por coma]","url_slug":"[slug]-{codigo_sku}"}}'
-            )
-            resp = client_oai.chat.completions.create(
-                model='qwen/qwen3-32b',
-                messages=[{'role': 'user', 'content': prompt_gpt}],
-                max_tokens=1000
-            )
-            content = resp.choices[0].message.content
-            finito = resp.choices[0].finish_reason
-            if not content:
-                log.error(f'  ❌ GPT devolvió contenido vacío (finish_reason: {finito})')
-                raise ValueError(f'GPT devolvió contenido vacío (finish_reason: {finito})')
-            if finito == 'length':
-                log.warning(f'  ⚠️ Respuesta truncada por límite de tokens (finish_reason: length)')
-            texto = content.strip()
-            if '```' in texto:
-                texto = texto.split('```')[1]
-                if texto.startswith('json'):
-                    texto = texto[4:]
-            else:
-                match = re.search(r'\{.*\}', texto, re.DOTALL)
-                if match:
-                    texto = match.group()
-            texto = texto.strip()
-            try:
-                contenido = json.loads(texto)
-            except json.JSONDecodeError as e:
-                log.error(f'  ❌ JSON inválido en título: {e}')
-                log.error(f'  📄 Texto: {texto[:500]}')
-                raise
-
             # Crear producto en VTEX
             producto_id = crear_producto(
-                titulo         = contenido['titulo'],
-                descripcion    = contenido['descripcion'],
+                titulo         = datos['titulo'],
+                descripcion    = datos['descripcion'],
                 categoria_key  = categoria,
                 marca_key      = marca,
                 codigo_ref     = codigo_sku,
-                palabras_clave = contenido['palabras_clave'],
-                url_slug       = contenido['url_slug'],
+                palabras_clave = datos['palabras_clave'],
+                url_slug       = datos['url_slug'],
             )
             if not producto_id:
                 continue
