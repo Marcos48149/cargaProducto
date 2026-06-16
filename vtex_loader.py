@@ -51,10 +51,10 @@ VTEX_HEADERS   = {
 
 
 client_oai = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
+    api_key=os.getenv("OPENROUTER_API_KEY")
 )
 
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_API_KEY = os.getenv('OPENROUTER_API_KEY')
 #GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 #genai.configure(api_key=GEMINI_API_KEY)
 
@@ -1056,7 +1056,7 @@ async def main():
 
             # Generar contenido con GPT-4o
             from openai import OpenAI
-            client_oai = OpenAI(api_key=OPENAI_API_KEY)
+            client_oai = OpenAI(api_key=OPENAI_API_KEY, base_url="https://openrouter.ai/api/v1")
             genero = ('Mujer' if 'mujer' in categoria else
                       'Niños' if 'ninos' in categoria else
                       'Unisex' if 'unisex' in categoria else 'Hombre')
