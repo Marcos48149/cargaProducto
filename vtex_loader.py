@@ -763,7 +763,7 @@ TALLES_FIELD_VALUE_IDS_NINOS = {
 }
 
 
-# ── GPT-4o-mini — analizar producto (única IA) ───────────────
+# ── GPT-4o — analizar producto (única IA) ─────────────────────
 
 def analizar_producto_con_gpt(codigo_sku, url_imagen, marca):
 
@@ -775,11 +775,19 @@ Analizá esta imagen del producto con código {codigo_sku} de la marca {marca}.
 Categorías disponibles (elegí la más exacta):
 {categorias_str}
 
+Instrucciones de género:
+- Determiná el género del producto mirando el diseño, forma, colores y proporciones.
+- Las zapatillas de mujer suelen ser más angostas, colores más claros/rosas/plata.
+- Las zapatillas de hombre suelen ser más anchas, colores oscuros/azules/negros/rojos.
+- Si es deporte infantil y claramente de niño → "ninos". Si no estás seguro, andá por el diseño.
+- Si no hay señales claras de género, usá "unisex".
+
 Devolvé SOLO UN JSON, sin texto extra, sin markdown:
 {{
     "CODIGO_SKU":      "{codigo_sku}",
+    "GENERO":          "[mujer | hombre | ninos | unisex]",
     "COLOR":           "[colores principales separados por /]",
-    "CATEGORIA":       "[categoría exacta de la lista]",
+    "CATEGORIA":       "[categoría exacta de la lista - debe coincidir con el género detectado]",
     "MARCA":           "{marca}",
     "TITULO":          "[título completo sin repeticiones]",
     "DESCRIPCION":     "[4 párrafos persuasivos, usa \\n para separarlos, en una sola línea]",
@@ -792,17 +800,18 @@ Devolvé SOLO UN JSON, sin texto extra, sin markdown:
     "TALLES_MANUALES": null
 }}
 
-Reglas para el título:
-- Identificá el modelo exacto usando el código del producto (ej: ADI-JP8445 → Fabela Rise 2).
-- Orden: Tipo de artículo + Marca + Modelo (sin repetir marca ni género) + Color + Género.
-- NO repetir palabras. Cada palabra (marca, género, tipo) debe aparecer UNA SOLA VEZ.
-- Ejemplo correcto: "Campera Puma Running Hooded Woven Jacket Vino/Rosa Mujer"
-- Ejemplo INCORRECTO: "Puma Campera Puma Running Hooded Woven Jacket Mujer Vino/Rosa Mujer"."""
+Reglas IMPORTANTES:
+1. Genero: usá el campo GENERO explícito arriba. La CATEGORIA debe coincidir (ej: GENERO=mujer → categoria debe ser zapatillas_mujer, no zapatillas_hombre).
+2. Modelo: identificalo usando el código del producto. Si no estás seguro del nombre exacto, NO inventes. Poné solo "Zapatillas {marca}" o "Botines {marca}" sin nombre inventado.
+3. Título: orden = Tipo de artículo + Marca + Modelo (sin repetir marca ni género) + Color + Género.
+4. NO repetir palabras. Cada palabra (marca, género, tipo) debe aparecer UNA SOLA VEZ.
+5. Ejemplo título correcto: "Zapatillas Adidas Fabela Rise 2 Negro/Rosa Mujer"
+6. Ejemplo INCORRECTO: "Adidas Zapatillas Adidas Fabela Rise 2 Mujer Negro/Rosa Mujer"."""
 
     from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY, base_url="https://openrouter.ai/api/v1")
     response = client.chat.completions.create(
-        model="openai/gpt-4o-mini",
+        model="openai/gpt-4o",
         messages=[
             {
                 "role": "user",
@@ -1049,8 +1058,8 @@ async def main():
             # URL imagen principal para Gemini
             url_principal = hacer_publico(drive_service, item['file_id'])
 
-            # GPT-4o-mini analiza todo (imagen + código)
-            log.info('🤖 Analizando con GPT-4o-mini...')
+            # GPT-4o analiza todo (imagen + código)
+            log.info('🤖 Analizando con GPT-4o...')
             datos = analizar_producto_con_gpt(codigo_sku, url_principal, marca)
             log.info(f"JSON IA: {datos}")
             datos = {
@@ -1063,8 +1072,15 @@ async def main():
                 log.warning(f'Categoría inválida: {categoria} — saltando')
                 continue
 
+            genero_ia = datos.get('genero', '').lower()
+            if genero_ia:
+                genero_en_cat = 'mujer' if 'mujer' in categoria else 'hombre' if 'hombre' in categoria else 'ninos' if 'ninos' in categoria else 'unisex'
+                if genero_ia != genero_en_cat and genero_ia != 'unisex':
+                    log.warning(f'⚠️ Conflicto de género: IA dice {genero_ia} pero categoría es {categoria}')
+
             log.info(f'   Título: {datos["titulo"][:80]}...')
             log.info(f'   Color:  {datos["color"]}')
+            log.info(f'   Género: {genero_ia}')
             log.info(f'   Cat:    {categoria}')
 
             # Crear producto en VTEX
