@@ -839,27 +839,36 @@ Reglas IMPORTANTES:
 5. Ejemplo título correcto: "Zapatillas Adidas Fabela Rise 2 Negro/Rosa Mujer"
 6. Ejemplo INCORRECTO: "Adidas Zapatillas Adidas Fabela Rise 2 Mujer Negro/Rosa Mujer"."""
 
-    from openai import OpenAI
-    client = OpenAI(api_key=OPENAI_API_KEY, base_url="https://openrouter.ai/api/v1")
-    response = client.chat.completions.create(
-        model="openai/gpt-4o",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": url_imagen}}
-                ]
-            }
-        ],
-        max_tokens=1200
-    )
-    content = response.choices[0].message.content
-    if not content:
-        log.error(f'  ❌ IA devolvió contenido vacío')
-        raise ValueError('IA devolvió contenido vacío')
-    texto = content.strip()
-    log.info(f'  📝 Respuesta cruda IA (primeros 300): {texto[:300]}')
+    modelos = ["openai/gpt-4o", "openai/gpt-4o-mini"]
+    for idx, model_name in enumerate(modelos):
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_API_KEY, base_url="https://openrouter.ai/api/v1")
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": url_imagen}}
+                    ]
+                }
+            ],
+            max_tokens=1200
+        )
+        content = response.choices[0].message.content
+        if not content:
+            log.warning(f'  ⚠️ {model_name} devolvió contenido vacío, {"reintentando con fallback" if idx < len(modelos)-1 else "último intento fallido"}')
+            continue
+        texto = content.strip()
+        if texto.startswith("I'm sorry") or texto.startswith("Sorry"):
+            log.warning(f'  ⚠️ {model_name} rechazó la solicitud, {"reintentando con fallback" if idx < len(modelos)-1 else "último intento fallido"}')
+            continue
+        log.info(f'  📝 Respuesta cruda IA (primeros 300): {texto[:300]}')
+        break
+    else:
+        log.error(f'  ❌ Todos los modelos fallaron')
+        raise ValueError('Todos los modelos fallaron')
 
     if '```' in texto:
         texto = texto.split('```')[1]
