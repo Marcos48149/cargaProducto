@@ -38,6 +38,29 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+
+# ── Web Search ─────────────────────────────────────────────────
+
+def buscar_en_web(codigo_sku, marca):
+    """Busca el producto en DuckDuckGo por código + marca.
+    Devuelve (titulo_web, snippet_web) o (None, None) si falla."""
+    try:
+        from duckduckgo_search import DDGS
+        query = f"{codigo_sku} {marca}"
+        log.info(f'  🌐 Buscando en web: {query}')
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
+            if results:
+                titulo = results[0]['title']
+                snippet = results[0].get('body', '')
+                log.info(f'  🌐 Resultado: {titulo[:120]}')
+                return titulo, snippet
+    except ImportError:
+        log.warning('  ⚠️ duckduckgo-search no instalado, omitiendo búsqueda web')
+    except Exception as e:
+        log.warning(f'  ⚠️ Error en búsqueda web: {e}')
+    return None, None
+
 # ── Credenciales ─────────────────────────────────────────────
 VTEX_ACCOUNT   = os.getenv('VTEX_ACCOUNT', 'showsport')
 VTEX_APP_KEY   = os.getenv('VTEX_APP_KEY')
@@ -765,13 +788,20 @@ TALLES_FIELD_VALUE_IDS_NINOS = {
 
 # ── GPT-4o — analizar producto (única IA) ─────────────────────
 
-def analizar_producto_con_gpt(codigo_sku, url_imagen, marca):
+def analizar_producto_con_gpt(codigo_sku, url_imagen, marca, web_title=None):
 
     categorias_str = '\n'.join(f'  - {c}' for c in CATEGORIAS.keys())
 
-    prompt = f"""Sos un experto en productos deportivos de una tienda e-commerce argentina llamada Showsport.
-Analizá esta imagen del producto con código {codigo_sku} de la marca {marca}.
+    contexto_web = ''
+    if web_title:
+        contexto_web = (
+            f"\nResultado de búsqueda web para este código:\n"
+            f"'{web_title}'\n"
+            f"Usá esta información para identificar el modelo exacto y el género correcto.\n"
+        )
 
+    prompt = f"""Sos un experto en productos deportivos de una tienda e-commerce argentina llamada Showsport.
+Analizá esta imagen del producto con código {codigo_sku} de la marca {marca}.{contexto_web}
 Categorías disponibles (elegí la más exacta):
 {categorias_str}
 
@@ -781,6 +811,7 @@ Instrucciones de género:
 - Las zapatillas de hombre suelen ser más anchas, colores oscuros/azules/negros/rojos.
 - Si es deporte infantil y claramente de niño → "ninos". Si no estás seguro, andá por el diseño.
 - Si no hay señales claras de género, usá "unisex".
+- Si la búsqueda web indica un género, priorizalo.
 
 Devolvé SOLO UN JSON, sin texto extra, sin markdown:
 {{
@@ -802,7 +833,7 @@ Devolvé SOLO UN JSON, sin texto extra, sin markdown:
 
 Reglas IMPORTANTES:
 1. Genero: usá el campo GENERO explícito arriba. La CATEGORIA debe coincidir (ej: GENERO=mujer → categoria debe ser zapatillas_mujer, no zapatillas_hombre).
-2. Modelo: identificalo usando el código del producto. Si no estás seguro del nombre exacto, NO inventes. Poné solo "Zapatillas {marca}" o "Botines {marca}" sin nombre inventado.
+2. Modelo: identificalo usando el código del producto o la búsqueda web. Si no estás seguro del nombre exacto, NO inventes. Poné solo "Zapatillas {marca}" o "Botines {marca}" sin nombre inventado.
 3. Título: orden = Tipo de artículo + Marca + Modelo (sin repetir marca ni género) + Color + Género.
 4. NO repetir palabras. Cada palabra (marca, género, tipo) debe aparecer UNA SOLA VEZ.
 5. Ejemplo título correcto: "Zapatillas Adidas Fabela Rise 2 Negro/Rosa Mujer"
@@ -1055,12 +1086,15 @@ async def main():
             prefijo = codigo_sku.split('-')[0].upper()
             marca   = PREFIX_TO_MARCA.get(prefijo, prefijo.lower())
 
-            # URL imagen principal para Gemini
+            # URL imagen principal
             url_principal = hacer_publico(drive_service, item['file_id'])
 
-            # GPT-4o analiza todo (imagen + código)
+            # Web search — buscar el producto por código
+            web_title, _ = buscar_en_web(codigo_sku, marca)
+
+            # GPT-4o analiza (imagen + código + web context)
             log.info('🤖 Analizando con GPT-4o...')
-            datos = analizar_producto_con_gpt(codigo_sku, url_principal, marca)
+            datos = analizar_producto_con_gpt(codigo_sku, url_principal, marca, web_title)
             log.info(f"JSON IA: {datos}")
             datos = {
                 k.lower(): v
