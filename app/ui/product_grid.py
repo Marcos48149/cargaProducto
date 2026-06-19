@@ -1,3 +1,4 @@
+import threading
 import flet as ft
 
 
@@ -6,9 +7,81 @@ def grid_view(page: ft.Page, state):
     def _edit_product(sku):
         page.go(f"/detail/{sku}")
 
+    def _generate_single(prod):
+        dlg = ft.AlertDialog(
+            title=ft.Text(f"Generando para {prod.sku}..."),
+            content=ft.Column([
+                ft.ProgressBar(),
+                ft.Text("Web search + GPT-4o, puede tomar unos segundos",
+                        size=12),
+            ], tight=True, spacing=10),
+        )
+        page.overlay.append(dlg)
+        dlg.open = True
+        page.update()
+
+        def _run():
+            try:
+                from app.core.product_pipeline import generate_product
+                datos = generate_product(prod.sku, prod.images)
+                if datos:
+                    _apply_data(prod, datos)
+            except Exception:
+                prod.estado = "Error"
+            dlg.open = False
+            page.go("/grid")  # Refresh
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _generate_all():
+        pendientes = [p for p in state.products
+                      if p.estado in ("Pendiente", "Error")]
+        if not pendientes:
+            return
+
+        dlg = ft.AlertDialog(
+            title=ft.Text("Generando todos..."),
+            content=ft.Column([
+                ft.ProgressBar(),
+                ft.Text("Procesando productos...", size=12),
+            ], tight=True, spacing=10),
+        )
+        page.overlay.append(dlg)
+        dlg.open = True
+        page.update()
+
+        def _run_all():
+            from app.core.product_pipeline import generate_product
+            for prod in pendientes:
+                try:
+                    datos = generate_product(prod.sku, prod.images)
+                    if datos:
+                        _apply_data(prod, datos)
+                except Exception:
+                    prod.estado = "Error"
+            dlg.open = False
+            page.go("/grid")  # Refresh
+
+        threading.Thread(target=_run_all, daemon=True).start()
+
+    def _apply_data(prod, datos):
+        prod.titulo = datos.get('titulo')
+        prod.descripcion = datos.get('descripcion')
+        prod.color = datos.get('color')
+        prod.categoria = datos.get('categoria')
+        prod.genero = datos.get('genero')
+        prod.talles = datos.get('talles', [])
+        prod.palabras_clave = datos.get('palabras_clave')
+        prod.url_slug = datos.get('url_slug')
+        try:
+            prod.precio = float(datos.get('precio', 0))
+        except (ValueError, TypeError):
+            prod.precio = 0
+        prod.estado = "IA_OK"
+
+    # ── Build cards ──
     product_cards = []
     for prod in state.products:
-        total = len(prod.images)
         status_color = {
             "Pendiente": ft.Colors.GREY,
             "IA_OK": ft.Colors.GREEN,
@@ -21,16 +94,19 @@ def grid_view(page: ft.Page, state):
             content=ft.Row([
                 ft.Column([
                     ft.Text(prod.sku, weight=ft.FontWeight.BOLD, size=16),
-                    ft.Text(f"{total} imagen{'es' if total != 1 else ''}",
-                            size=12, color=ft.Colors.GREY_600),
+                    ft.Text(
+                        f"{len(prod.images)} imagen{'es' if len(prod.images) != 1 else ''}",
+                        size=12, color=ft.Colors.GREY_600),
                 ], spacing=2, width=220),
                 ft.Container(
                     content=ft.Column([
-                        ft.Text(prod.preview_titulo[:50],
-                                size=13, no_wrap=True,
-                                overflow=ft.TextOverflow.ELLIPSIS),
-                        ft.Text(prod.color or "—", size=12,
-                                color=ft.Colors.GREY_600),
+                        ft.Text(
+                            (prod.titulo or prod.sku)[:60],
+                            size=13, no_wrap=True,
+                            overflow=ft.TextOverflow.ELLIPSIS),
+                        ft.Text(
+                            prod.color or "—", size=12,
+                            color=ft.Colors.GREY_600),
                     ], spacing=2),
                     expand=True,
                 ),
@@ -43,13 +119,15 @@ def grid_view(page: ft.Page, state):
                     ft.IconButton(
                         ft.Icons.AUTO_AWESOME,
                         tooltip="Generar con IA",
-                        data=prod.sku,
+                        disabled=prod.estado in ("IA_OK", "Subido"),
+                        on_click=lambda e, s=prod.sku:
+                            _generate_single(state.get_product(s)),
                     ),
                     ft.IconButton(
                         ft.Icons.EDIT,
                         tooltip="Editar",
-                        data=prod.sku,
-                        on_click=lambda e, s=prod.sku: _edit_product(s),
+                        on_click=lambda e, s=prod.sku:
+                            _edit_product(s),
                     ),
                 ]),
             ]),
@@ -87,8 +165,7 @@ def grid_view(page: ft.Page, state):
         floating_action_button=ft.FloatingActionButton(
             text="Generar todo",
             icon=ft.Icons.AUTO_AWESOME,
-            on_click=lambda e: None,
-            disabled=True,
+            on_click=lambda e: _generate_all(),
         ),
     )
     return view

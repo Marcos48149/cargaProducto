@@ -1,4 +1,19 @@
+import threading
 import flet as ft
+
+
+def _refresh_view(page, prod, titulo_f, desc_f, color_f, cat_dd,
+                  gen_dd, talles_f, kw_f, slug_f, precio_f):
+    titulo_f.value = prod.titulo or ""
+    desc_f.value = prod.descripcion or ""
+    color_f.value = prod.color or ""
+    cat_dd.value = prod.categoria
+    gen_dd.value = prod.genero
+    talles_f.value = ", ".join(prod.talles) if prod.talles else ""
+    kw_f.value = prod.palabras_clave or ""
+    slug_f.value = prod.url_slug or ""
+    precio_f.value = str(prod.precio) if prod.precio else ""
+    page.update()
 
 
 def detail_view(page: ft.Page, state, sku):
@@ -93,13 +108,54 @@ def detail_view(page: ft.Page, state, sku):
         prod.estado = "Editado"
         page.go("/grid")
 
+    def _generate_ia(e):
+        dlg = ft.AlertDialog(
+            title=ft.Text(f"Generando IA..."),
+            content=ft.Column([
+                ft.ProgressBar(),
+                ft.Text("Web search + GPT-4o", size=12),
+            ], tight=True, spacing=10),
+        )
+        page.overlay.append(dlg)
+        dlg.open = True
+        page.update()
+
+        def _run():
+            try:
+                from app.core.product_pipeline import generate_product
+                datos = generate_product(prod.sku, prod.images)
+                if datos:
+                    prod.titulo = datos.get('titulo')
+                    prod.descripcion = datos.get('descripcion')
+                    prod.color = datos.get('color')
+                    prod.categoria = datos.get('categoria')
+                    prod.genero = datos.get('genero')
+                    prod.talles = datos.get('talles', [])
+                    prod.palabras_clave = datos.get('palabras_clave')
+                    prod.url_slug = datos.get('url_slug')
+                    try:
+                        prod.precio = float(datos.get('precio', 0))
+                    except (ValueError, TypeError):
+                        prod.precio = 0
+                    prod.estado = "IA_OK"
+            except Exception:
+                prod.estado = "Error"
+            dlg.open = False
+            _refresh_view(page, prod, titulo, descripcion, color,
+                          categoria, genero, talles, palabras_clave,
+                          url_slug, precio)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    from app.core.product_pipeline import image_to_data_url
+
     image_thumbnails = ft.Row(
         wrap=True,
         spacing=6,
         controls=[
             ft.Container(
                 content=ft.Image(
-                    src=f,
+                    src=image_to_data_url(f),
                     width=120,
                     height=120,
                     fit=ft.ImageFit.COVER,
@@ -112,11 +168,10 @@ def detail_view(page: ft.Page, state, sku):
         ],
     )
     if len(prod.images) > 6:
-        extra = len(prod.images) - 6
         image_thumbnails.controls.append(
             ft.Container(
-                content=ft.Text(f"+{extra} más", size=12,
-                                color=ft.Colors.GREY_600),
+                content=ft.Text(f"+{len(prod.images) - 6} más",
+                                size=12, color=ft.Colors.GREY_600),
                 width=120, height=120,
                 alignment=ft.alignment.center,
                 border=ft.border.all(1, ft.Colors.GREY_300),
@@ -139,7 +194,7 @@ def detail_view(page: ft.Page, state, sku):
                     "Generar IA",
                     icon=ft.Icons.AUTO_AWESOME,
                     style=ft.ButtonStyle(color=ft.Colors.WHITE),
-                    disabled=True,
+                    on_click=_generate_ia,
                 ),
             ],
         ),
@@ -148,8 +203,8 @@ def detail_view(page: ft.Page, state, sku):
                 content=ft.ResponsiveRow([
                     ft.Column(
                         controls=[
-                            ft.Text("Imágenes", weight=ft.FontWeight.BOLD,
-                                    size=16),
+                            ft.Text("Imágenes",
+                                    weight=ft.FontWeight.BOLD, size=16),
                             image_thumbnails,
                             ft.Container(height=10),
                             ft.Text("Datos del producto",
@@ -162,8 +217,8 @@ def detail_view(page: ft.Page, state, sku):
                     ),
                     ft.Column(
                         controls=[
-                            ft.Text("Detalles", weight=ft.FontWeight.BOLD,
-                                    size=16),
+                            ft.Text("Detalles",
+                                    weight=ft.FontWeight.BOLD, size=16),
                             categoria,
                             genero,
                             color,
