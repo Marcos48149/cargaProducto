@@ -150,6 +150,14 @@ def grid_view(page: ft.Page, state):
                 ft.Icons.ARROW_BACK,
                 on_click=lambda _: page.go("/"),
             ),
+            actions=[
+                ft.TextButton(
+                    "Subir a VTEX",
+                    icon=ft.Icons.CLOUD_UPLOAD,
+                    style=ft.ButtonStyle(color=ft.Colors.WHITE),
+                    on_click=lambda _: page.go("/upload"),
+                ),
+            ],
         ),
         controls=[
             ft.Container(

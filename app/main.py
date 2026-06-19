@@ -9,6 +9,7 @@ from app.state import AppState
 from app.ui.home import home_view
 from app.ui.product_grid import grid_view
 from app.ui.product_detail import detail_view
+from app.ui.upload_panel import upload_view
 
 
 def main(page: ft.Page):
@@ -31,6 +32,8 @@ def main(page: ft.Page):
         elif page.route.startswith("/detail/"):
             sku = page.route.split("/detail/", 1)[1]
             page.views.append(detail_view(page, app_state, sku))
+        elif page.route == "/upload":
+            page.views.append(upload_view(page, app_state))
         else:
             page.go("/")
             return
