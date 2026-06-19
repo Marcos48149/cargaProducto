@@ -15,3 +15,5 @@ Pillow==10.2.0
 python-dotenv==1.0.0
 
 duckduckgo-search>=7.0.0
+
+flet>=0.25.0
