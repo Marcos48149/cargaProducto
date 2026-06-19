@@ -5,8 +5,12 @@ from app.core.image_loader import scan_folder
 
 def home_view(page: ft.Page, state):
 
-    pick_folder = ft.FilePicker(on_result=lambda e: _on_folder_picked(e, page, state))
-    page.overlay.append(pick_folder)
+    existing = [c for c in page.overlay if isinstance(c, ft.FilePicker)]
+    if existing:
+        pick_folder = existing[0]
+    else:
+        pick_folder = ft.FilePicker(on_result=lambda e: _on_folder_picked(e, page, state))
+        page.overlay.append(pick_folder)
 
     def _on_folder_picked(e, page, state):
         if e.path:
